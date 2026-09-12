@@ -8,8 +8,7 @@ Write every step you tried, even guesses.
 
 English is better. Persian is OK.
 
-## Problem 1: (short name)
-Nginx Upstream Misconfiguration
+## Problem 1: Nginx Upstream Misconfiguration
 What was wrong:
 The nginx.conf file was configured to proxy traffic to http://backend-api:8080. However, the backend service is named backend (not backend-api), and according to the Dockerfile and entrypoint.sh, Gunicorn starts the backend application listening on port 5000 (not 8080). This caused a 502 Bad Gateway error because Nginx could not find the upstream host on the specified port.
 
@@ -40,7 +39,17 @@ cat /opt/service-catalog/backend/app.py
 sed -i 's|http://backend-api:8080|http://backend:5000|g' /opt/service-catalog/nginx/nginx.conf
 grep backend_upstream /opt/service-catalog/nginx/nginx.conf
 ```
-
+reslut:
+```
+root@reserve-5-scenario1:/opt/service-catalog/backend# curl -i http://localhost/graph
+HTTP/1.1 200 OK
+Server: nginx/1.27.5
+Date: Sat, 12 Sep 2026 12:43:32 GMT
+Content-Type: application/json
+Content-Length: 743
+Connection: keep-alive
+{"edges":[{"from":"frontend","id":1,"to":"backend"},{"from":"frontend","id":2,"to":"redis"},{"from":"backend","id":3,"to":"postgres"},{"from":"backend","id":4,"to":"redis"},{"from":"backend","id":5,"to":"auth"},{"from":"worker","id":6,"to":"postgres"},{"from":"worker","id":7,"to":"kafka"},{"from":"auth","id":8,"to":"postgres"}],"nodes":[{"id":1,"kind":"service","name":"frontend","type":"frontend"},{"id":2,"kind":"service","name":"backend","type":"backend"},{"id":3,"kind":"service","name":"worker","type":"worker"},{"id":4,"kind":"service","name":"auth","type":"auth"},{"id":5,"kind":"infra","name":"postgres","type":"database"},{"id":6,"kind":"infra","name":"redis","type":"cache"},{"id":7,"kind":"infra","name":"kafka","type":"queue"}]}
+```
 ## Problem 2:Docker Network Isolation in docker-compose.yml
 What was wrong:
 In the provided docker-compose.yml, the backend service was attached to nginx-backend-net and the db service was attached to backend-db-net. Because they were on separate, isolated Docker networks, the backend container could not resolve or connect to the db hostname, causing the application to crash with Connection refused when trying to reach PostgreSQL.
