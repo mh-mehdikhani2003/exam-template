@@ -62,15 +62,22 @@ roles/monitoring/tasks/main.yml — the heart of the scenario. It contains, in o
 Section
 What it does
 Prerequisites	apt install wget curl tar gnupg adduser apt-transport-https software-properties-common
+
 Node Exporter	Create nodeexp system user → get_url v1.7.0 tarball from github.com → unarchive → copy binary to /usr/local/bin/node_exporter → write /etc/systemd/system/node_exporter.service with --web.listen-address=0.0.0.0:9100 → daemon_reload + enabled: true + state: started. Every change notifies restart node_exporter.
+
 Prometheus	Create prometheus user → make /etc/prometheus + /var/lib/prometheus → get_url v2.48.0 → install prometheus and promtool binaries + consoles + console_libraries → write /etc/prometheus/prometheus.yml with two scrape jobs (prometheus and node_exporter, both at localhost) → systemd unit with --web.listen-address=0.0.0.0:9090 → enable + start. Notify: restart prometheus.
+
 Grafana	apt_key add Grafana GPG key → apt_repository add https://apt.grafana.com stable main → apt install grafana → create provisioning directories (datasources, dashboards, /var/lib/grafana/dashboards).
+
 Datasource	Write /etc/grafana/provisioning/datasources/prometheus.yml — declares Prometheus as the default datasource, type: prometheus, uid: prometheus, url: http://localhost:9090. Notify: restart grafana.
+
 Dashboard provider	Write /etc/grafana/provisioning/dashboards/dashboards.yml — tells Grafana to scan /var/lib/grafana/dashboards/*.json every 30 s.
+
 CPU & Memory dashboard	Write /var/lib/grafana/dashboards/cpu-memory.json. Two panels:
 • CPU Usage (%) — 100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[5m])) * 100)
 • Memory Usage — node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes vs node_memory_MemTotal_bytes
 The JSON body is wrapped in {% raw %} … {% endraw %} so Ansible does not try to template Grafana's {{instance}} legend placeholder (see Challenges).
+
 Enable + wait	Enable + start grafana-server, then poll http://localhost:3000/api/health with retries: 30, delay: 2 until it returns 200 (Grafana takes ~30 s on first boot).
 
 roles/monitoring/handlers/main.yml — three service restart handlers:
@@ -104,6 +111,7 @@ monitoring:
 Notes:
 
 The private key is not stored in the inventory. The brief mandates passing it on the command line via --private-key ~/.ssh/id_ed25519_fanap, so the key file lives in ~/.ssh/ of the control node and is supplied at run time.
+
 Since I am already root on the exam VM and the target is the VM itself, ansible_host: 127.0.0.1 and ansible_user: root are the correct values. For Option 2 (Vagrant) one would set 192.168.56.10 / vagrant here instead.
 ## Credentials / Login
 Add any login or credential data here. For example
@@ -134,9 +142,12 @@ For example:
 python command not found: the Ubuntu 24.04 image ships only python3. First python -m venv .venv failed. Fixed by using python3 everywhere and apt install python3.12-venv to enable venv support.
 No internet access to pypi.org: pip install -r requirements.txt timed out against pypi.org (ReadTimeoutError, 15 s × 5 retries). It is a network policy on the exam VM, not a pin issue. Fixed by skipping pip and using apt install ansible-core (Ubuntu's mirror is reachable). Final version: ansible [core 2.16.3].
 python3-ansible package missing: the suggested apt install -y ansible python3-ansible ... failed with E: Unable to locate package python3-ansible. The package is just called ansible-core on Ubuntu 24.04. Used apt install ansible-core instead.
+
 Stale bash hash for pip: after switching directories, bash still pointed pip at /root/.venv/bin/pip (deleted venv). The shell was activating a venv that no longer existed. Fixed with deactivate, hash -r, and recreating the venv inside ~/exam.
 'instance' is undefined: the dashboard JSON contains "legendFormat": "{{instance}}". Grafana uses that {{ }} for label interpolation, but Ansible's Jinja2 templating engine parsed it first and tried to evaluate a variable named instance. The Provision CPU & Memory dashboard task failed (failed=1, ok=24). Fixed by wrapping only the dashboard JSON body in {% raw %} … {% endraw %} blocks (lines 252 and 295 of roles/monitoring/tasks/main.yml). After the patch the playbook completed cleanly: ok=26 changed=3 unreachable=0 failed=0 skipped=2.
+
 id_ed25519_fanap key did not exist on the VM: the brief mandates --private-key ~/.ssh/id_ed25519_fanap, but the file was missing on the fresh VM. Generated it with ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_fanap -N "" and appended its .pub to ~/.ssh/authorized_keys so Ansible (running as root against 127.0.0.1) could authenticate non-interactively.
+
 GitHub push rejected: git push origin scenario-2 failed with password authentication is not supported for Git operations. GitHub requires a Personal Access Token or SSH key instead of the account password. The fix commit (cc8041d) was therefore kept locally; the patched file is on the VM and the playbook runs reproducibly from the working tree. (To push: create a PAT at https://github.com/settings/tokens, then git remote set-url origin https://<TOKEN>@github.com/mh-mehdikhani2003/exam-template.git and git push.)
 # Verification:
 ```
