@@ -249,6 +249,7 @@
     group: grafana
     mode: "0644"
     content: |
+      {% raw %}
       {
         "annotations": {"list": []},
         "title": "CPU and Memory",
@@ -291,6 +292,7 @@
         ],
         "time": {"from": "now-1h", "to": "now"}
       }
+      {% endraw %}
   notify: restart grafana
 
 - name: Enable and start Grafana
